@@ -3,9 +3,6 @@ import pandas as pd
 from rapidfuzz import process
 from io import BytesIO
 
-# Set max upload size for OpenShift
-st.set_option('server.maxUploadSize', 10)
-
 st.set_page_config(layout="wide")
 st.title("🔍 IBM Component Multi-Search Viewer")
 st.markdown("Upload the Excel file and search for multiple components to view their associated links.")
