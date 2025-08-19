@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import re
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 import streamlit.components.v1 as components
 
 st.set_page_config(layout="wide")
@@ -279,4 +279,6 @@ if uploaded_file:
             st.download_button("Download CSV", data=csv, file_name="search_results.csv", mime="text/csv")
 else:
     st.info("Please upload your Excel file to start.")
+
+
 
