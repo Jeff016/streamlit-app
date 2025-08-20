@@ -100,44 +100,78 @@ with col2:
 
 st.markdown("---")
 
-# Use session state to handle the uploaded file
+# Use session state to handle the uploaded file and its data
+if 'data_loaded' not in st.session_state:
+    st.session_state.data_loaded = False
 if 'df_cache' not in st.session_state:
     st.session_state.df_cache = {}
-if 'xls_file' not in st.session_state:
-    st.session_state.xls_file = None
 if 'component_types' not in st.session_state:
     st.session_state.component_types = []
+if 'xls_sheet_names' not in st.session_state:
+    st.session_state.xls_sheet_names = []
+if 'last_uploaded_file_id' not in st.session_state:
+    st.session_state.last_uploaded_file_id = None
 
+
+# File uploader widget
 uploaded_file = st.file_uploader("Upload your Excel file", type=["xlsx"])
 
-if uploaded_file:
-    # Check if a new file has been uploaded
-    if st.session_state.xls_file != uploaded_file.name:
-        st.session_state.xls_file = uploaded_file.name
-        
-        # Read the uploaded file into an in-memory byte buffer
-        xls_bytes = io.BytesIO(uploaded_file.getvalue())
-        
-        try:
-            xls = pd.ExcelFile(xls_bytes, engine="openpyxl")
-            st.session_state.xls_sheet_names = xls.sheet_names
-            
-            component_types = set()
-            st.session_state.df_cache = {}
-            for sheet in st.session_state.xls_sheet_names:
-                df = pd.read_excel(xls_bytes, sheet_name=sheet, engine="openpyxl")
-                st.session_state.df_cache[sheet] = df.copy() # Store a copy of the dataframe
-                df.columns = df.columns.str.strip()
-                if "Component Type" in df.columns:
-                    component_types.update(df["Component Type"].dropna().unique())
-            st.session_state.component_types = sorted(list(component_types))
-            st.success("File uploaded and data loaded successfully!")
-        except Exception as e:
-            st.error(f"Error loading the Excel file: {e}. Please ensure it is a valid .xlsx file.")
-            st.session_state.xls_file = None
-            st.stop()
+# --- MODIFIED SECTION START ---
 
-if st.session_state.xls_file:
+# Function to load and process the excel file
+@st.cache_data(show_spinner=False)
+def load_data(uploaded_file_obj):
+    """Loads data from the uploaded Excel file and caches it."""
+    try:
+        # pd.ExcelFile can take the uploaded file object directly
+        xls = pd.ExcelFile(uploaded_file_obj, engine="openpyxl")
+        
+        sheet_names = xls.sheet_names
+        df_cache = {}
+        component_types = set()
+
+        for sheet in sheet_names:
+            df = pd.read_excel(xls, sheet_name=sheet)
+            df_cache[sheet] = df.copy()  # Store a copy of the dataframe
+            df.columns = df.columns.str.strip()
+            if "Component Type" in df.columns:
+                component_types.update(df["Component Type"].dropna().unique())
+        
+        return True, df_cache, sorted(list(component_types)), sheet_names, None
+    except Exception as e:
+        error_message = f"Error loading the Excel file: {e}. Please ensure it is a valid, uncorrupted .xlsx file."
+        return False, {}, [], [], error_message
+
+# Process file only if a new file is uploaded
+if uploaded_file is not None:
+    # Use a unique ID for the uploaded file to check if it's a new file
+    current_file_id = uploaded_file.file_id
+    if st.session_state.last_uploaded_file_id != current_file_id:
+        with st.spinner('Processing your Excel file... This may take a moment.'):
+            (
+                success,
+                df_cache,
+                component_types,
+                sheet_names,
+                error,
+            ) = load_data(uploaded_file)
+
+            if success:
+                st.session_state.data_loaded = True
+                st.session_state.df_cache = df_cache
+                st.session_state.component_types = component_types
+                st.session_state.xls_sheet_names = sheet_names
+                st.session_state.last_uploaded_file_id = current_file_id
+                st.success("File uploaded and data loaded successfully!")
+                st.rerun() # Rerun to update the UI state immediately
+            else:
+                st.error(error)
+                st.session_state.data_loaded = False
+                st.session_state.last_uploaded_file_id = None
+
+# --- MODIFIED SECTION END ---
+
+if st.session_state.data_loaded:
     # Use cached dataframes from session state
     component_types = st.session_state.component_types
     xls_sheet_names = st.session_state.xls_sheet_names
@@ -194,7 +228,7 @@ if st.session_state.xls_file:
                     st.warning(f"Sheet '{sheet_name}' not found in cache. Skipping.")
                     continue
                 
-                # ... (rest of the search logic, which is fine as is)
+                # ... (rest of the search logic remains the same)
                 first_row = df.iloc[0].astype(str).str.lower().tolist()
                 if any("general search" in cell for cell in first_row):
                     df = df[1:]
@@ -265,38 +299,4 @@ if st.session_state.xls_file:
                                         width="medium",
                                     ),
                                     "Quantity": st.column_config.NumberColumn(
-                                        label="Quantity",
-                                        width="small",
-                                    ),
-                                    "Hardware Status": st.column_config.TextColumn(
-                                        label="Status",
-                                        width="small",
-                                    ),
-                                    "Location": st.column_config.TextColumn(
-                                        label="Location",
-                                        width="small",
-                                    ),
-                                    "Notes": st.column_config.TextColumn(
-                                        label="Notes",
-                                        width="medium",
-                                    ),
-                                    "Link": st.column_config.LinkColumn(
-                                        label="Link",
-                                        help="Click to open the link",
-                                        width="large",
-                                    )
-                                },
-                                hide_index=True,
-                                use_container_width=True
-                            )
-                    else:
-                        st.info(f"No matching components found for {site}.")
-
-        if export_data:
-            st.markdown("---")
-            st.subheader("📤 Export Results")
-            export_df = pd.DataFrame(export_data)
-            csv = export_df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download CSV", data=csv, file_name="search_results.csv", mime="text/csv")
-else:
-    st.info("Please upload your Excel file to start.")
+                                        label="
