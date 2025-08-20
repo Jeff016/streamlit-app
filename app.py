@@ -223,4 +223,9 @@ if st.session_state.data_loaded:
                 try:
                     df = st.session_state.df_cache[sheet_name].copy() # Use the cached dataframe
                 except KeyError:
-                    st.warning(f
+                    st.warning(f"Sheet '{sheet_name}' not found in cache. Skipping.")
+                    continue
+                
+                first_row = df.iloc[0].astype(str).str.lower().tolist()
+                if any("general search" in cell for cell in first_row):
+                    df
